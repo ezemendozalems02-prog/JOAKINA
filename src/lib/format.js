@@ -10,6 +10,11 @@ export const splitList = (value) =>
     .map((entry) => entry.trim())
     .filter(Boolean)
 
-/** Las imágenes propias de /img/ tienen una versión de 480px para celulares. */
-export const imageSrcSet = (src) =>
-  src?.startsWith('/img/') ? `${src.replace('.webp', '-480.webp')} 480w, ${src} 1200w` : undefined
+/** Las fotos de /img/ tienen versiones de 480px (y 900px las anchas) para celulares. */
+const WIDE = ['/img/hero.webp', '/img/reservas.webp']
+export const imageSrcSet = (src) => {
+  if (!src?.startsWith('/img/')) return undefined
+  const small = `${src.replace('.webp', '-480.webp')} 480w`
+  if (WIDE.includes(src)) return `${small}, ${src.replace('.webp', '-900.webp')} 900w, ${src} 2000w`
+  return `${small}, ${src} 1200w`
+}

@@ -22,6 +22,12 @@ export const DEFAULT_DATA = {
     reservationTimes: '09:00, 10:00, 11:00, 12:00, 13:00, 14:00, 15:00, 16:00, 17:00, 18:00, 19:00, 20:00, 21:00, 22:00',
   },
 
+  // Delivery y take away: se configuran en el panel. Los valores vacíos no se muestran al cliente.
+  service: {
+    retiro: { enabled: true, minutes: '', note: '' },
+    delivery: { enabled: true, minutes: '', note: '', fee: '', freeFrom: '', minOrder: '' },
+  },
+
   images: {
     hero: '/img/hero.webp',
     experience1: '/img/exp-sushi.webp',

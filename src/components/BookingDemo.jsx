@@ -4,7 +4,7 @@ import { Minus, Plus } from 'lucide-react'
 import { useSite } from '../context/SiteContext'
 import { splitList, whatsappUrl } from '../lib/format'
 import {
-  CUSTOM_TABLE, MAX_PARTY, TABLES, createReservation, dayStatus, eligibleTables, isClosed,
+  CUSTOM_TABLE, MAX_PARTY, PLAN_ROWS, createReservation, dayStatus, eligibleTables, isClosed,
   isPast, isTableFree, loadReservations, nextDays, parseISO, setReservationStatus, tableById,
 } from '../lib/reservations'
 import './booking.css'
@@ -12,8 +12,14 @@ import './booking.css'
 const PRESETS = [2, 4, 6]
 const STATUS_TEXT = { ok: 'Hay lugar', few: 'Pocos lugares', full: 'Completo', closed: 'Cerrado' }
 
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1)
+const goTo = (id) => requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
 const longDate = (iso) => new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }).format(parseISO(iso))
 const shortDay = (iso, part) => new Intl.DateTimeFormat('es-AR', part === 'wd' ? { weekday: 'short' } : { month: 'short' }).format(parseISO(iso)).replace('.', '')
+
+function Chairs({ count, side }) {
+  return <span className={`chairs chairs--${side}`} aria-hidden="true">{Array.from({ length: count }, (_, i) => <i key={i} />)}</span>
+}
 
 function Confirmation({ reservation, info, onNew, onCancel }) {
   const table = tableById(reservation.tableId)
@@ -29,7 +35,7 @@ function Confirmation({ reservation, info, onNew, onCancel }) {
       <p className="eyebrow">{cancelled ? 'Reserva cancelada' : 'Reserva confirmada'}</p>
       <p className="code">{reservation.code}</p>
       <dl className="sum">
-        <dt>Fecha</dt><dd>{longDate(reservation.date)}</dd>
+        <dt>Fecha</dt><dd>{cap(longDate(reservation.date))}</dd>
         <dt>Horario</dt><dd>{reservation.time} hs</dd>
         <dt>Mesa</dt><dd>{table?.label}</dd>
         <dt>Comensales</dt><dd>{reservation.party}</dd>
@@ -83,8 +89,8 @@ export default function BookingDemo() {
   }
 
   const choose = (value, isCustom = false) => { setParty(value); setCustom(isCustom); resetFrom('party'); setDate('') }
-  const pickDate = (iso) => { setDate(iso); setTime(''); setTableId(''); setError('') }
-  const pickTime = (slot) => { setTime(slot.time); setTableId(slot.free[0]?.id ?? ''); setError('') }
+  const pickDate = (iso) => { setDate(iso); setTime(''); setTableId(''); setError(''); goTo('step-time') }
+  const pickTime = (slot) => { setTime(slot.time); setTableId(slot.free[0]?.id ?? ''); setError(''); goTo('step-table') }
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
   const submit = (e) => {
@@ -109,6 +115,7 @@ export default function BookingDemo() {
 
   const tooBig = party > MAX_PARTY
   const customFree = freeIds.has(CUSTOM_TABLE.id)
+  const freeCount = eligible.filter((t) => freeIds.has(t.id)).length
 
   return (
     <div>
@@ -139,7 +146,7 @@ export default function BookingDemo() {
           )}
         </section>
 
-        <section className="step" inert={tooBig}>
+        <section className="step" id="step-date" inert={tooBig}>
           <h3 className="step__title"><span>2</span>¿Qué día?</h3>
           <div className="days" role="radiogroup" aria-label="Fecha de la reserva">
             {days.map((d, i) => {
@@ -160,7 +167,7 @@ export default function BookingDemo() {
           <p className="legend"><span><i />Hay lugar</span><span className="is-few"><i />Pocos lugares</span><span className="is-full"><i />Completo o cerrado</span></p>
         </section>
 
-        <section className="step" inert={!date}>
+        <section className="step" id="step-time" inert={!date}>
           <h3 className="step__title"><span>3</span>¿A qué hora?{date && <small>{longDate(date)}</small>}</h3>
           <div className="slots" role="radiogroup" aria-label="Horario">
             {slots.map((slot) => {
@@ -177,27 +184,37 @@ export default function BookingDemo() {
           </div>
         </section>
 
-        <section className="step" inert={!time}>
+        <section className="step" id="step-table" inert={!time}>
           <h3 className="step__title"><span>4</span>Elegí tu mesa{selected && <small>{selected.label} · {selected.seats} lugares</small>}</h3>
+          <p className="plan-info" aria-live="polite">
+            {freeCount > 0 ? <><b>{freeCount}</b> {freeCount === 1 ? 'mesa libre' : 'mesas libres'} para {party} personas. Tocá una para elegirla.</> : 'No quedan mesas libres a esta hora.'}
+          </p>
           <div className="plan" role="group" aria-label="Plano del salón">
-            {TABLES.map((t) => {
-              const isEligible = eligibleIds.has(t.id)
-              const free = freeIds.has(t.id)
-              const on = selected && (selected.id === t.id || selected.members?.includes(t.id))
-              const state = on ? 'is-on' : !isEligible ? 'is-dim' : free ? '' : 'is-busy'
-              const label = !isEligible ? 'no corresponde a este grupo' : free ? 'disponible' : 'ocupada'
-              return (
-                <button key={t.id} type="button" disabled={!isEligible || !free} aria-pressed={!!on}
-                  aria-label={`${t.label}, ${t.seats} personas, ${label}`} className={`tbl ${state}`}
-                  style={{ left: `${t.x}%`, top: `${t.y}%`, width: `${t.w}%`, height: `${t.h}%` }}
-                  onClick={() => setTableId(t.id)}>
-                  <span className="tbl__n">{t.n}</span>
-                  <span className="tbl__s">{t.seats} pers.</span>
-                </button>
-              )
-            })}
+            {PLAN_ROWS.map((row) => (
+              <div className="plan__row" key={row.join()}>
+                {row.map((id) => {
+                  const t = tableById(id)
+                  const isEligible = eligibleIds.has(t.id)
+                  const free = freeIds.has(t.id)
+                  const on = selected && (selected.id === t.id || selected.members?.includes(t.id))
+                  const state = on ? 'is-on' : !isEligible ? 'is-dim' : free ? '' : 'is-busy'
+                  const label = !isEligible ? 'no corresponde a este grupo' : free ? 'disponible' : 'ocupada'
+                  return (
+                    <button key={t.id} type="button" disabled={!isEligible || !free} aria-pressed={!!on}
+                      aria-label={`${t.label}, ${t.seats} personas, ${label}`} className={`tbl tbl--${t.seats} ${state}`}
+                      onClick={() => setTableId(t.id)}>
+                      <Chairs count={Math.ceil(t.seats / 2)} side="top" />
+                      <span className="tbl__n">{t.n}</span>
+                      <span className="tbl__s">{t.seats} pers.</span>
+                      <Chairs count={Math.floor(t.seats / 2)} side="bottom" />
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
+            <p className="plan__door" aria-hidden="true">Entrada</p>
           </div>
-          <p className="plan-legend"><span><i />Disponible</span><span className="is-on"><i />Tu mesa</span><span className="is-busy"><i />Ocupada</span></p>
+          <p className="plan-legend"><span><i />Disponible</span><span className="is-on"><i />Tu mesa</span><span className="is-busy"><i />Ocupada</span><span className="is-dim"><i />No corresponde</span></p>
           {eligibleIds.has(CUSTOM_TABLE.id) && (
             <button type="button" disabled={!customFree} aria-pressed={tableId === CUSTOM_TABLE.id}
               className={`custom-pick ${tableId === CUSTOM_TABLE.id ? 'is-on' : ''}`} onClick={() => setTableId(CUSTOM_TABLE.id)}>
@@ -205,13 +222,14 @@ export default function BookingDemo() {
               <span>{customFree ? 'Disponible' : 'Ocupada'}</span>
             </button>
           )}
+          {tableId && <button type="button" className="btn btn--line btn--full next" onClick={() => goTo('step-form')}>Continuar con mis datos</button>}
         </section>
 
-        <form className="step form" inert={!tableId} onSubmit={submit}>
+        <form className="step form" id="step-form" inert={!tableId} onSubmit={submit}>
           <h3 className="step__title"><span>5</span>Tus datos</h3>
           {selected && (
             <dl className="sum">
-              <dt>Fecha</dt><dd>{longDate(date)}</dd>
+              <dt>Fecha</dt><dd>{cap(longDate(date))}</dd>
               <dt>Horario</dt><dd>{time} hs</dd>
               <dt>Mesa</dt><dd>{selected.label}</dd>
               <dt>Comensales</dt><dd>{party}</dd>

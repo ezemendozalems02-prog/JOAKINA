@@ -43,12 +43,13 @@ export function SiteProvider({ children }) {
   const updateMenu    = useCallback((menu)    => persist({ ...data, menu }),    [data, persist])
   const updateGallery = useCallback((gallery) => persist({ ...data, gallery }), [data, persist])
   const updatePromos  = useCallback((promos)  => persist({ ...data, promos }),  [data, persist])
+  const updateService = useCallback((service) => persist({ ...data, service }), [data, persist])
   const resetAll      = useCallback(() => {
     try { localStorage.removeItem(KEY) } catch { /* almacenamiento no disponible */ }
     setData(DEFAULT_DATA)
   }, [])
 
-  const save = { updateInfo, updateImages, updateMenu, updateGallery, updatePromos, resetAll }
+  const save = { updateInfo, updateImages, updateMenu, updateGallery, updatePromos, updateService, resetAll }
 
   return (
     <SiteContext.Provider value={{ data, ...save, toastVisible }}>

@@ -8,19 +8,21 @@
 const KEY = 'joakina_reservations'
 const STAY = 120 // minutos que una reserva ocupa la mesa
 
-// x, y, w, h en % del plano del salón.
 export const TABLES = [
-  { id: 'M1', n: 1, label: 'Mesa 1', seats: 2, x: 4, y: 5, w: 20, h: 17 },
-  { id: 'M2', n: 2, label: 'Mesa 2', seats: 2, x: 28, y: 5, w: 20, h: 17 },
-  { id: 'M3', n: 3, label: 'Mesa 3', seats: 2, x: 52, y: 5, w: 20, h: 17 },
-  { id: 'M4', n: 4, label: 'Mesa 4', seats: 2, x: 76, y: 5, w: 20, h: 17 },
-  { id: 'M5', n: 5, label: 'Mesa 5', seats: 4, x: 4, y: 28, w: 26, h: 17 },
-  { id: 'M6', n: 6, label: 'Mesa 6', seats: 4, x: 37, y: 28, w: 26, h: 17 },
-  { id: 'M7', n: 7, label: 'Mesa 7', seats: 4, x: 70, y: 28, w: 26, h: 17 },
-  { id: 'M8', n: 8, label: 'Mesa 8', seats: 6, x: 4, y: 51, w: 32, h: 17 },
-  { id: 'M9', n: 9, label: 'Mesa 9', seats: 6, x: 44, y: 51, w: 32, h: 17 },
-  { id: 'M10', n: 10, label: 'Mesa 10', seats: 10, x: 22, y: 74, w: 56, h: 17 },
+  { id: 'M1', n: 1, label: 'Mesa 1', seats: 2 },
+  { id: 'M2', n: 2, label: 'Mesa 2', seats: 2 },
+  { id: 'M3', n: 3, label: 'Mesa 3', seats: 2 },
+  { id: 'M4', n: 4, label: 'Mesa 4', seats: 2 },
+  { id: 'M5', n: 5, label: 'Mesa 5', seats: 4 },
+  { id: 'M6', n: 6, label: 'Mesa 6', seats: 4 },
+  { id: 'M7', n: 7, label: 'Mesa 7', seats: 4 },
+  { id: 'M8', n: 8, label: 'Mesa 8', seats: 6 },
+  { id: 'M9', n: 9, label: 'Mesa 9', seats: 6 },
+  { id: 'M10', n: 10, label: 'Mesa 10', seats: 10 },
 ]
+
+/** Cómo se acomodan las mesas en el plano, fila por fila. */
+export const PLAN_ROWS = [['M1', 'M2', 'M3', 'M4'], ['M5', 'M6', 'M7'], ['M8', 'M9'], ['M10']]
 
 // Para grupos grandes se unen la Mesa 9 y la Mesa 10.
 export const CUSTOM_TABLE = { id: 'MX', label: 'Mesa a medida', seats: 16, members: ['M9', 'M10'] }

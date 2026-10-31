@@ -13,12 +13,17 @@ export function CartProvider({ children }) {
   const { data } = useSite()
   const [lines, setLines] = useState(loadCart)
   const [open, setOpen] = useState(false)
-  const [mode, setMode] = useState('retiro')
+  const [chosenMode, setMode] = useState('retiro')
   const [lastAdded, setLastAdded] = useState(null)
 
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(lines)) } catch { /* almacenamiento no disponible */ }
   }, [lines])
+
+  // Modalidades que el local tiene activadas en el panel. Si la elegida se desactiva, pasa a la otra.
+  const service = data.service
+  const allowed = ['retiro', 'delivery'].filter((key) => service[key]?.enabled)
+  const mode = allowed.includes(chosenMode) ? chosenMode : (allowed[0] ?? chosenMode)
 
   // Precio, nombre y foto salen siempre de la carta vigente, no del carrito guardado.
   const items = useMemo(() => {
@@ -56,7 +61,7 @@ export function CartProvider({ children }) {
   const count = items.reduce((sum, i) => sum + i.qty, 0)
   const subtotal = items.reduce((sum, i) => sum + i.qty * i.price, 0)
 
-  const value = { items, count, subtotal, add, setQty, remove, clear, open, setOpen, mode, setMode, lastAdded }
+  const value = { items, count, subtotal, add, setQty, remove, clear, open, setOpen, mode, setMode, allowed, service, lastAdded }
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>
 }
 

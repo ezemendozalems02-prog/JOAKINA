@@ -1,39 +1,45 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Bike, Check, ShoppingBag } from 'lucide-react'
+import { Check, ShoppingBag } from 'lucide-react'
 import { useSite } from '../context/SiteContext'
 import { useCart } from '../context/CartContext'
 import { useTitle } from '../lib/useTitle'
 import { formatPrice, splitList, whatsappUrl } from '../lib/format'
+import { computeTotals, createOrder } from '../lib/orders'
 import { CartLine } from '../components/Cart'
+import ModeSwitch from '../components/ModeSwitch'
 import { WhatsAppIcon } from '../components/icons'
 
-function buildMessage({ items, subtotal, form, mode }) {
+function buildMessage({ code, items, subtotal, totals, form, mode }) {
   const lines = items.map((i) => {
     const name = [i.name, i.units, i.option].filter(Boolean).join(' · ')
     return `• ${i.qty}x ${name} (${formatPrice(i.price * i.qty)})`
   })
+  const totalLine = mode !== 'delivery' ? `Total: ${formatPrice(totals.total)}`
+    : totals.toCoordinate ? `Total: ${formatPrice(subtotal)} + envío a coordinar`
+      : `Total: ${formatPrice(totals.total)}${totals.fee ? ` (incluye envío ${formatPrice(totals.fee)})` : ' (envío gratis)'}`
   return [
-    'Hola Joakina Sushi! Quiero hacer un pedido:',
+    `Hola Joakina Sushi! Quiero hacer el pedido ${code}:`,
     '',
     ...lines,
     '',
-    `Total: ${formatPrice(subtotal)}${mode === 'delivery' ? ' + envío a coordinar' : ''}`,
+    totalLine,
     '',
     `Nombre: ${form.name}`,
     `Teléfono: ${form.phone}`,
-    `Entrega: ${mode === 'delivery' ? 'Delivery' : 'Retiro por el local'}`,
+    `Entrega: ${mode === 'delivery' ? 'Delivery' : 'Take away (retiro en el local)'}`,
     mode === 'delivery' ? `Dirección: ${form.address}` : '',
     `Pago: ${form.payment}`,
     form.notes ? `Aclaraciones: ${form.notes}` : '',
   ].filter((line, index, all) => line !== '' || all[index - 1] !== '').join('\n')
 }
 
-function Confirmation({ whatsappLink }) {
+function Confirmation({ order, whatsappLink }) {
   return (
     <section className="wrap confirm">
       <motion.span className="confirm__mark" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}><Check size={30} strokeWidth={1.2} /></motion.span>
+      <p className="eyebrow">Pedido {order.code}</p>
       <h1>Tu pedido está listo</h1>
       <p className="lead">Lo abrimos en WhatsApp con todos los datos. Envialo desde ahí para que lo recibamos y te confirmemos.</p>
       <a className="btn btn--gold" href={whatsappLink} target="_blank" rel="noopener noreferrer"><WhatsAppIcon /> Abrir WhatsApp de nuevo</a>
@@ -44,23 +50,44 @@ function Confirmation({ whatsappLink }) {
 
 export default function Checkout() {
   const { data: { info } } = useSite()
-  const { items, subtotal, mode, setMode, clear } = useCart()
+  const { items, subtotal, mode, clear, service, allowed } = useCart()
   const payments = splitList(info.payments)
   const [form, setForm] = useState({ name: '', phone: '', address: '', payment: payments[0] ?? '', notes: '' })
-  const [sentLink, setSentLink] = useState(null)
+  const [done, setDone] = useState(null)
   useTitle('Finalizar pedido')
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
+  const totals = computeTotals(service, mode, subtotal)
+  const minOrder = mode === 'delivery' ? Number(service.delivery.minOrder) || 0 : 0
+  const missing = minOrder > subtotal ? minOrder - subtotal : 0
+  const current = service[mode]
 
   const submit = (e) => {
     e.preventDefault()
-    const link = whatsappUrl(info.whatsapp, buildMessage({ items, subtotal, form, mode }))
+    if (missing > 0) return
+    const order = createOrder({
+      mode, items, subtotal, fee: totals.fee, total: totals.total, toCoordinate: totals.toCoordinate,
+      customer: { name: form.name, phone: form.phone, address: mode === 'delivery' ? form.address : '' },
+      payment: form.payment, notes: form.notes,
+    })
+    const link = whatsappUrl(info.whatsapp, buildMessage({ code: order.code, items, subtotal, totals, form, mode }))
     window.open(link, '_blank', 'noopener')
-    setSentLink(link)
+    setDone({ order, link })
     clear()
   }
 
-  if (sentLink) return <Confirmation whatsappLink={sentLink} />
+  if (done) return <Confirmation order={done.order} whatsappLink={done.link} />
+
+  if (allowed.length === 0) {
+    return (
+      <section className="wrap confirm">
+        <ShoppingBag size={32} strokeWidth={1} />
+        <h1>Pedidos pausados</h1>
+        <p className="lead">Por el momento no estamos tomando pedidos online. Escribinos y te ayudamos.</p>
+        <a className="btn btn--gold" href={whatsappUrl(info.whatsapp)} target="_blank" rel="noopener noreferrer"><WhatsAppIcon /> Escribir por WhatsApp</a>
+      </section>
+    )
+  }
 
   if (items.length === 0) {
     return (
@@ -88,17 +115,12 @@ export default function Checkout() {
 
         <fieldset>
           <legend><span>2</span> Entrega</legend>
-          <div className="mode-switch mode-switch--form" role="radiogroup" aria-label="Modalidad de entrega">
-            <button type="button" role="radio" aria-checked={mode === 'retiro'} className={mode === 'retiro' ? 'is-on' : ''} onClick={() => setMode('retiro')}>
-              <ShoppingBag size={18} strokeWidth={1.2} /> Retiro por el local
-            </button>
-            <button type="button" role="radio" aria-checked={mode === 'delivery'} className={mode === 'delivery' ? 'is-on' : ''} onClick={() => setMode('delivery')}>
-              <Bike size={18} strokeWidth={1.2} /> Delivery
-            </button>
-          </div>
+          <ModeSwitch form />
           {mode === 'delivery'
             ? <label>Dirección de entrega<input required autoComplete="street-address" value={form.address} onChange={set('address')} /></label>
             : <p className="hint">Retirás en {info.address}.</p>}
+          {current.note && <p className="hint">{current.note}</p>}
+          {missing > 0 && <p className="form-error" role="alert">El pedido mínimo para delivery es {formatPrice(minOrder)}. Te faltan {formatPrice(missing)}.</p>}
         </fieldset>
 
         <fieldset>
@@ -119,9 +141,11 @@ export default function Checkout() {
           <h2>Resumen</h2>
           <ul>{items.map((item) => <CartLine key={item.key} item={item} />)}</ul>
           <div className="total total--sub"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
-          {mode === 'delivery' && <div className="total total--sub"><span>Envío</span><span>A coordinar</span></div>}
-          <div className="total"><span>Total</span><strong>{formatPrice(subtotal)}</strong></div>
-          <button type="submit" className="btn btn--gold btn--full"><WhatsAppIcon /> Confirmar por WhatsApp</button>
+          {mode === 'delivery' && (
+            <div className="total total--sub"><span>Envío</span><span>{totals.toCoordinate ? 'A coordinar' : totals.free || !totals.fee ? 'Gratis' : formatPrice(totals.fee)}</span></div>
+          )}
+          <div className="total"><span>Total</span><strong>{formatPrice(totals.total)}</strong></div>
+          <button type="submit" className="btn btn--gold btn--full" disabled={missing > 0}><WhatsAppIcon /> Confirmar por WhatsApp</button>
         </aside>
       </form>
     </div>

@@ -1,12 +1,15 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useId } from 'react'
 import { useSite } from '../context/SiteContext'
-import { splitList } from '../lib/format'
+import { formatPrice, splitList } from '../lib/format'
+import { ACTIVE, MODE_LABEL, NEXT, deleteOrder, loadOrders, setOrderStatus, statusLabel } from '../lib/orders'
 import { deleteReservation, loadReservations, setReservationStatus, tableById, toISO } from '../lib/reservations'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowUpRight, Check, Eye, EyeOff, Image as ImageIcon, Images, Info, CalendarDays, LayoutDashboard, Menu as MenuIcon, RotateCcw, Save, Tag, UtensilsCrossed } from 'lucide-react'
+import { ArrowUpRight, Check, Eye, EyeOff, Image as ImageIcon, Images, Info, Bike, CalendarDays, LayoutDashboard, Menu as MenuIcon, RotateCcw, Save, Tag, UtensilsCrossed } from 'lucide-react'
 import { Isotype } from '../components/Logo'
 
 const PASS = 'lacan2025'
+// Acceso libre por el momento. Poné true para volver a pedir la contraseña.
+const REQUIRE_PASSWORD = false
 
 // ─── Tokens ───────────────────────────────────────────────
 const C = {
@@ -32,11 +35,12 @@ const base = {
 
 // ─── Primitives ───────────────────────────────────────────
 function Inp({ label, hint, type = 'text', value, onChange, placeholder, mono }) {
+  const id = useId()
   const [fo, setFo] = useState(false)
   return (
     <div style={{ marginBottom: 18 }}>
-      {label && <label style={{ display: 'block', fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: fo ? C.gold : C.muted, marginBottom: 7, transition: 'color 0.2s' }}>{label}</label>}
-      <input type={type} value={value} onChange={onChange} placeholder={placeholder}
+      {label && <label htmlFor={id} style={{ display: 'block', fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: fo ? C.gold : C.muted, marginBottom: 7, transition: 'color 0.2s' }}>{label}</label>}
+      <input id={id} type={type} value={value} onChange={onChange} placeholder={placeholder}
         onFocus={e => { setFo(true); e.target.style.borderColor = C.gold }}
         onBlur={e => { setFo(false); e.target.style.borderColor = C.border }}
         style={{ ...base, fontFamily: mono ? 'monospace' : f.sans }} />
@@ -46,11 +50,12 @@ function Inp({ label, hint, type = 'text', value, onChange, placeholder, mono })
 }
 
 function Txt({ label, value, onChange, rows = 3, placeholder }) {
+  const id = useId()
   const [fo, setFo] = useState(false)
   return (
     <div style={{ marginBottom: 18 }}>
-      {label && <label style={{ display: 'block', fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: fo ? C.gold : C.muted, marginBottom: 7, transition: 'color 0.2s' }}>{label}</label>}
-      <textarea value={value} onChange={onChange} rows={rows} placeholder={placeholder}
+      {label && <label htmlFor={id} style={{ display: 'block', fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: fo ? C.gold : C.muted, marginBottom: 7, transition: 'color 0.2s' }}>{label}</label>}
+      <textarea id={id} value={value} onChange={onChange} rows={rows} placeholder={placeholder}
         onFocus={e => { setFo(true); e.target.style.borderColor = C.gold }}
         onBlur={e => { setFo(false); e.target.style.borderColor = C.border }}
         style={{ ...base, resize: 'vertical' }} />
@@ -59,11 +64,12 @@ function Txt({ label, value, onChange, rows = 3, placeholder }) {
 }
 
 function Sel({ label, value, onChange, options }) {
+  const id = useId()
   const [fo, setFo] = useState(false)
   return (
     <div style={{ marginBottom: 18 }}>
-      {label && <label style={{ display: 'block', fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: fo ? C.gold : C.muted, marginBottom: 7, transition: 'color 0.2s' }}>{label}</label>}
-      <select value={value} onChange={onChange}
+      {label && <label htmlFor={id} style={{ display: 'block', fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: fo ? C.gold : C.muted, marginBottom: 7, transition: 'color 0.2s' }}>{label}</label>}
+      <select id={id} value={value} onChange={onChange}
         onFocus={e => { setFo(true); e.target.style.borderColor = C.gold }}
         onBlur={e => { setFo(false); e.target.style.borderColor = C.border }}
         style={{ ...base, cursor: 'pointer', appearance: 'none', background: '#0d0d0d' }}>
@@ -171,6 +177,7 @@ function Dashboard({ data, setSection }) {
     { label: 'Fotos en galería',  value: data.gallery.length, sub: `${visibleGallery} visibles`,          icon: Images, section: 'galeria' },
     { label: 'Promos activas',    value: data.promos.filter(p => p.visible).length, sub: 'en portada',   icon: Tag, section: 'promos' },
     { label: 'Imágenes del sitio',value: Object.keys(data.images).length, sub: 'portada y secciones',   icon: ImageIcon, section: 'imagenes' },
+    { label: 'Pedidos nuevos',    value: loadOrders().filter(o => o.status === 'nuevo').length, sub: 'delivery y take away', icon: Bike, section: 'pedidos' },
   ]
   const actions = [
     { icon: UtensilsCrossed, label: 'Editar precios de la carta',   sub: 'Actualizá precios, descripciones y badges',   section: 'menu' },
@@ -542,6 +549,156 @@ function InfoEditor() {
 // MAIN ADMIN
 // ═══════════════════════════════════════════════════════════
 
+// ── DELIVERY Y TAKE AWAY ──────────────────────────────────
+const MODE_FILTERS = [['todos', 'Todos'], ['delivery', 'Delivery'], ['retiro', 'Take away']]
+const STATE_FILTERS = [['activos', 'Activos'], ['entregado', 'Entregados'], ['cancelado', 'Cancelados'], ['todos', 'Todos']]
+
+function Chip({ on, onClick, children }) {
+  return (
+    <button onClick={onClick} style={{ fontFamily: f.sans, fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '10px 16px', border: `1px solid ${on ? C.gold : C.border}`, color: on ? C.gold : C.muted, background: 'transparent', cursor: 'pointer' }}>{children}</button>
+  )
+}
+
+function OrdersList() {
+  const [orders, setOrders] = useState(loadOrders)
+  const [mode, setMode] = useState('todos')
+  const [state, setState] = useState('activos')
+  const when = (iso) => new Date(iso).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  const count = (s) => orders.filter((o) => o.status === s).length
+  const todayKey = new Date().toDateString()
+  const todaySales = orders.filter((o) => o.status !== 'cancelado' && new Date(o.createdAt).toDateString() === todayKey).reduce((sum, o) => sum + o.total, 0)
+
+  const shown = orders
+    .filter((o) => (mode === 'todos' || o.mode === mode) && (state === 'todos' ? true : state === 'activos' ? ACTIVE.includes(o.status) : o.status === state))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+
+  const tiles = [['Nuevos', count('nuevo')], ['Preparando', count('preparando')], ['Listos / en camino', count('listo')], ['Ventas de hoy', formatPrice(todaySales)]]
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 28 }}>
+        {tiles.map(([label, value]) => (
+          <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderTop: `2px solid ${C.gold}`, padding: '16px 16px' }}>
+            <div style={{ fontFamily: f.serif, fontSize: 32, color: C.gold, lineHeight: 1 }}>{value}</div>
+            <div style={{ fontFamily: f.sans, fontSize: 12, color: C.muted, marginTop: 6 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        {MODE_FILTERS.map(([k, l]) => <Chip key={k} on={mode === k} onClick={() => setMode(k)}>{l}</Chip>)}
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 22, alignItems: 'center' }}>
+        {STATE_FILTERS.map(([k, l]) => <Chip key={k} on={state === k} onClick={() => setState(k)}>{l}</Chip>)}
+        <Btn small variant="ghost" onClick={() => setOrders(loadOrders())}>Actualizar</Btn>
+      </div>
+
+      {shown.length === 0 && <Card><p style={{ fontFamily: f.sans, fontSize: 13, color: C.muted }}>No hay pedidos en esta vista. Los pedidos hechos desde la web aparecen acá.</p></Card>}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {shown.map((o) => {
+          const closed = o.status === 'entregado' || o.status === 'cancelado'
+          return (
+            <div key={o.id} data-order={o.code} style={{ background: C.card, border: `1px solid ${C.border}`, borderLeft: `3px solid ${o.status === 'cancelado' ? 'rgba(255,255,255,0.1)' : C.gold}`, padding: '16px 18px', opacity: closed ? 0.62 : 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'baseline', marginBottom: 6 }}>
+                <div style={{ fontFamily: f.serif, fontSize: 22, color: C.cream }}>{o.code} <span style={{ fontFamily: f.sans, fontSize: 12, color: C.muted }}>· {when(o.createdAt)}</span></div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <span style={{ fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '4px 9px', border: `1px solid ${C.border}`, color: C.cream }}>{MODE_LABEL[o.mode]}</span>
+                  <span style={{ fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '4px 9px', background: o.status === 'cancelado' ? 'rgba(239,68,68,0.12)' : 'rgba(198,166,107,0.16)', color: o.status === 'cancelado' ? C.danger : C.gold }}>{statusLabel(o.status, o.mode)}</span>
+                </div>
+              </div>
+              <div style={{ fontFamily: f.sans, fontSize: 13, color: C.subtle, lineHeight: 1.6, marginBottom: 10 }}>
+                <b style={{ color: C.cream, fontWeight: 600 }}>{o.customer.name}</b> · <a href={`tel:${o.customer.phone}`} style={{ color: C.gold }}>{o.customer.phone}</a>
+                {o.mode === 'delivery' && o.customer.address && <><br />Dirección: {o.customer.address}</>}
+                <br />Pago: {o.payment}
+                {o.notes && <><br />Nota: {o.notes}</>}
+              </div>
+              <ul style={{ listStyle: 'none', borderTop: `1px solid ${C.border}`, padding: '8px 0', marginBottom: 8 }}>
+                {o.items.map((i, idx) => (
+                  <li key={idx} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontFamily: f.sans, fontSize: 13, color: C.cream, padding: '3px 0' }}>
+                    <span>{i.qty}× {[i.name, i.units, i.option].filter(Boolean).join(' · ')}</span><span style={{ color: C.muted }}>{formatPrice(i.price * i.qty)}</span>
+                  </li>
+                ))}
+              </ul>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ fontFamily: f.sans, fontSize: 12, color: C.muted }}>
+                  {o.mode === 'delivery' && (o.toCoordinate ? 'Envío a coordinar' : `Envío ${o.fee ? formatPrice(o.fee) : 'gratis'}`)}
+                </div>
+                <div style={{ fontFamily: f.serif, fontSize: 24, color: C.gold }}>{formatPrice(o.total)}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                {NEXT[o.status] && <Btn small onClick={() => setOrders(setOrderStatus(o.id, NEXT[o.status]))}>Pasar a {statusLabel(NEXT[o.status], o.mode)}</Btn>}
+                {!closed && <Btn small variant="danger" onClick={() => setOrders(setOrderStatus(o.id, 'cancelado'))}>Cancelar</Btn>}
+                {closed && <Btn small variant="outline" onClick={() => setOrders(setOrderStatus(o.id, 'nuevo'))}>Reabrir</Btn>}
+                <Btn small variant="ghost" onClick={() => { if (confirm('¿Eliminar este pedido?')) setOrders(deleteOrder(o.id)) }}>Eliminar</Btn>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function ServiceConfig() {
+  const { data, updateService } = useSite()
+  const [cfg, setCfg] = useState(() => JSON.parse(JSON.stringify(data.service)))
+  const set = (mode, field) => (e) => setCfg((c) => ({ ...c, [mode]: { ...c[mode], [field]: e.target.value } }))
+  const toggle = (mode) => setCfg((c) => ({ ...c, [mode]: { ...c[mode], enabled: !c[mode].enabled } }))
+
+  const Switch = ({ mode }) => (
+    <button onClick={() => toggle(mode)} aria-pressed={cfg[mode].enabled} style={{ fontFamily: f.sans, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '9px 14px', border: 'none', cursor: 'pointer', background: cfg[mode].enabled ? 'rgba(74,222,128,0.12)' : 'rgba(239,68,68,0.12)', color: cfg[mode].enabled ? '#4ade80' : '#ef4444' }}>
+      {cfg[mode].enabled ? '● Activado' : '○ Desactivado'}
+    </button>
+  )
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
+        <Btn onClick={() => updateService(cfg)}><Save size={14} style={{ verticalAlign: -2, marginRight: 8 }} />Guardar configuración</Btn>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24 }}>
+        <Card>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+            <p style={{ fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold }}>Delivery</p>
+            <Switch mode="delivery" />
+          </div>
+          <Inp label="Tiempo estimado" value={cfg.delivery.minutes} onChange={set('delivery', 'minutes')} placeholder="Ej: 40 a 60 min" />
+          <Inp label="Costo de envío ($)" value={cfg.delivery.fee} onChange={set('delivery', 'fee')} placeholder="Vacío = a coordinar" hint="Si lo dejás vacío, el cliente ve «A coordinar». Con 0 el envío es gratis." />
+          <Inp label="Envío gratis desde ($)" value={cfg.delivery.freeFrom} onChange={set('delivery', 'freeFrom')} placeholder="Ej: 80000" />
+          <Inp label="Pedido mínimo ($)" value={cfg.delivery.minOrder} onChange={set('delivery', 'minOrder')} placeholder="Ej: 30000" />
+          <Txt label="Zonas de entrega y aclaraciones" value={cfg.delivery.note} onChange={set('delivery', 'note')} rows={3} placeholder="Se muestra al cliente en el pedido." />
+        </Card>
+        <Card>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+            <p style={{ fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold }}>Take away</p>
+            <Switch mode="retiro" />
+          </div>
+          <Inp label="Tiempo estimado" value={cfg.retiro.minutes} onChange={set('retiro', 'minutes')} placeholder="Ej: 20 a 30 min" />
+          <Txt label="Aclaración de retiro" value={cfg.retiro.note} onChange={set('retiro', 'note')} rows={3} placeholder="Ej: Retiro por la puerta principal." />
+          <p style={{ fontFamily: f.sans, fontSize: 12, color: C.muted, lineHeight: 1.6 }}>Si desactivás una modalidad, el cliente ya no puede elegirla. Si desactivás las dos, la web avisa que los pedidos están pausados.</p>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+function PedidosEditor() {
+  const [tab, setTab] = useState('pedidos')
+  return (
+    <div>
+      <SectionHeader eyebrow="Pedidos online" title="Delivery y Take Away"
+        subtitle="Los pedidos de la web llegan acá. Demo: se ven sólo en este navegador. Con una base de datos real los verías todos, desde cualquier dispositivo." />
+      <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, marginBottom: 28 }}>
+        {[['pedidos', 'Pedidos'], ['config', 'Configuración']].map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} style={{ fontFamily: f.sans, fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: tab === k ? C.gold : C.muted, background: 'none', border: 'none', borderBottom: tab === k ? `2px solid ${C.gold}` : '2px solid transparent', padding: '13px 18px', cursor: 'pointer', marginBottom: -1 }}>{l}</button>
+        ))}
+      </div>
+      {tab === 'pedidos' ? <OrdersList /> : <ServiceConfig />}
+    </div>
+  )
+}
+
 // ── RESERVAS ──────────────────────────────────────────────
 function ReservasEditor() {
   const [list, setList] = useState(loadReservations)
@@ -596,6 +753,7 @@ const NAV = [
   { id: 'promos',    label: 'Promos',       icon: Tag },
   { id: 'galeria',   label: 'Galería',      icon: Images },
   { id: 'imagenes',  label: 'Imágenes',     icon: ImageIcon },
+  { id: 'pedidos',   label: 'Delivery / Take Away', icon: Bike },
   { id: 'reservas',  label: 'Reservas',     icon: CalendarDays },
   { id: 'info',      label: 'Información',  icon: Info },
 ]
@@ -611,6 +769,7 @@ function AdminPanel() {
     promos:    <PromosEditor />,
     galeria:   <GaleriaEditor />,
     imagenes:  <ImagenesEditor />,
+    pedidos:   <PedidosEditor />,
     reservas:  <ReservasEditor />,
     info:      <InfoEditor />,
   }
@@ -705,7 +864,7 @@ function AdminPanel() {
 // ═══════════════════════════════════════════════════════════
 export default function Admin() {
   const [pass, setPass]       = useState('')
-  const [auth, setAuth]       = useState(() => sessionStorage.getItem('jsl_admin') === '1')
+  const [auth, setAuth]       = useState(() => !REQUIRE_PASSWORD || sessionStorage.getItem('jsl_admin') === '1')
   const [err, setErr]         = useState(false)
   const [show, setShow]       = useState(false)
 

@@ -53,11 +53,11 @@ function PublicLayout() {
 
 function AppRoutes() {
   const location = useLocation()
-  const isAdmin = location.pathname.startsWith('/admin')
+  const isAdmin = location.pathname.toLowerCase().startsWith('/admin')
   if (isAdmin) {
     return (
       <Suspense fallback={<div className="route-loading" />}>
-        <Routes><Route path="/admin" element={<Admin />} /></Routes>
+        <Routes><Route path="/admin/*" element={<Admin />} /></Routes>
       </Suspense>
     )
   }
