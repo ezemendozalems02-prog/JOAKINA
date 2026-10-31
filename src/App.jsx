@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect } from 'react'
 import { MotionConfig, motion } from 'framer-motion'
 import { SiteProvider } from './context/SiteContext'
 import { CartProvider } from './context/CartContext'
+import { ClubProvider } from './club/ClubContext'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import Cart from './components/Cart'
@@ -16,6 +17,7 @@ const Contacto = lazy(() => import('./pages/Contacto'))
 const Admin = lazy(() => import('./pages/Admin'))
 const TakeAway = lazy(() => import('./pages/TakeAway'))
 const Checkout = lazy(() => import('./pages/Checkout'))
+const ClubRoutes = lazy(() => import('./club/ClubRoutes'))
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
@@ -41,6 +43,7 @@ function PublicLayout() {
             <Route path="/contacto"      element={<Contacto />} />
             <Route path="/takeaway"      element={<TakeAway />} />
             <Route path="/checkout"      element={<Checkout />} />
+            <Route path="/club/*"        element={<ClubRoutes />} />
             <Route path="*"              element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
@@ -68,11 +71,13 @@ export default function App() {
   return (
     <MotionConfig reducedMotion="user">
       <SiteProvider>
+        <ClubProvider>
         <CartProvider>
           <BrowserRouter>
             <AppRoutes />
           </BrowserRouter>
         </CartProvider>
+        </ClubProvider>
       </SiteProvider>
     </MotionConfig>
   )

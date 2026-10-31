@@ -22,6 +22,7 @@ export default function Footer() {
           <Link to="/takeaway">Pedidos</Link>
           <Link to="/takeaway?modo=delivery">Delivery</Link>
           <Link to="/contacto">Reservas</Link>
+          <Link to="/club">Joakina Club</Link>
         </nav>
 
         <div className="footer__col">

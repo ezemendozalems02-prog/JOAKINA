@@ -10,6 +10,7 @@ const links = [
   { label: 'Carta', to: '/menu' },
   { label: 'Pedir online', to: '/takeaway' },
   { label: 'Reservas', to: '/contacto' },
+  { label: 'Joakina Club', to: '/club' },
   { label: 'Nosotros', to: '/nosotros' },
   { label: 'Galería', to: '/galeria' },
 ]

@@ -8,6 +8,7 @@ import { formatPrice } from '../lib/format'
 import Photo from '../components/Photo'
 import Reveal from '../components/Reveal'
 import { ProductCard } from '../components/Product'
+import ClubPromo from '../components/ClubPromo'
 
 const EASE = [0.22, 1, 0.36, 1]
 // Con la intro en pantalla los textos del hero esperan a que termine.
@@ -156,6 +157,7 @@ export default function Home() {
       <Experience images={data.images} />
       <Featured menu={data.menu} />
       <Combos image={data.images.combinados} menu={data.menu} />
+      <ClubPromo />
       <Promos promos={data.promos} />
       <Reservation image={data.images.reservas} />
     </>

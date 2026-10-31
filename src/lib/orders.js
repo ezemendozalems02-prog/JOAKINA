@@ -32,20 +32,26 @@ export function loadOrders() {
   try { return JSON.parse(localStorage.getItem(KEY)) || [] } catch { return [] }
 }
 
+const listeners = new Set()
+/** Permite que otros módulos (Joakina Club) reaccionen cuando cambia un pedido. */
+export const onOrdersChanged = (fn) => { listeners.add(fn); return () => listeners.delete(fn) }
+
 function persist(list) {
   try { localStorage.setItem(KEY, JSON.stringify(list)) } catch { /* sin almacenamiento la demo no guarda */ }
+  listeners.forEach((fn) => { try { fn(list) } catch { /* un oyente fallido no debe romper el pedido */ } })
   return list
 }
 
-export function createOrder({ mode, items, subtotal, fee, total, toCoordinate, customer, payment, notes }) {
+export function createOrder({ mode, items, subtotal, fee, total, toCoordinate, customer, payment, notes, memberId = null }) {
   const order = {
-    id: `o_${Date.now()}`,
+    id: `o_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
     code: `P-${Math.floor(1000 + Math.random() * 9000)}`,
     createdAt: new Date().toISOString(),
     status: 'nuevo',
     mode,
     items: items.map((i) => ({ name: i.name, units: i.units, option: i.option, qty: i.qty, price: i.price })),
     subtotal, fee, total, toCoordinate: !!toCoordinate, customer, payment, notes,
+    memberId, // socio de Joakina Club al que se vinculan los puntos (null = pedido de invitado)
   }
   persist([...loadOrders(), order])
   return order

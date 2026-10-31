@@ -7,11 +7,13 @@ import { useCart } from '../context/CartContext'
 import { useTitle } from '../lib/useTitle'
 import { formatPrice, splitList, whatsappUrl } from '../lib/format'
 import { computeTotals, createOrder } from '../lib/orders'
+import { useClub } from '../club/ClubContext'
+import { previewOrderPoints } from '../club/store'
 import { CartLine } from '../components/Cart'
 import ModeSwitch from '../components/ModeSwitch'
 import { WhatsAppIcon } from '../components/icons'
 
-function buildMessage({ code, items, subtotal, totals, form, mode }) {
+function buildMessage({ code, items, subtotal, totals, form, mode, memberNumber }) {
   const lines = items.map((i) => {
     const name = [i.name, i.units, i.option].filter(Boolean).join(' · ')
     return `• ${i.qty}x ${name} (${formatPrice(i.price * i.qty)})`
@@ -27,6 +29,7 @@ function buildMessage({ code, items, subtotal, totals, form, mode }) {
     totalLine,
     '',
     `Nombre: ${form.name}`,
+    memberNumber ? `Socio Joakina Club: ${memberNumber}` : '',
     `Teléfono: ${form.phone}`,
     `Entrega: ${mode === 'delivery' ? 'Delivery' : 'Take away (retiro en el local)'}`,
     mode === 'delivery' ? `Dirección: ${form.address}` : '',
@@ -42,6 +45,9 @@ function Confirmation({ order, whatsappLink }) {
       <p className="eyebrow">Pedido {order.code}</p>
       <h1>Tu pedido está listo</h1>
       <p className="lead">Lo abrimos en WhatsApp con todos los datos. Envialo desde ahí para que lo recibamos y te confirmemos.</p>
+      {order.memberId
+        ? <p className="club-banner" style={{ margin: 0 }}><b>¡Excelente! Tu pedido fue registrado.</b><small>Cuando lo recibas, vas a recibir tus puntos de Joakina Club.</small></p>
+        : <p className="club-banner" style={{ margin: 0 }}><b>¿Querés sumar puntos con tus próximos pedidos?</b><small>Sumate gratis a Joakina Club. Este pedido se hizo como invitado y no acredita puntos.</small><span className="row"><Link className="btn btn--line" to="/club/registro">Quiero sumarme</Link></span></p>}
       <a className="btn btn--gold" href={whatsappLink} target="_blank" rel="noopener noreferrer"><WhatsAppIcon /> Abrir WhatsApp de nuevo</a>
       <Link className="link-btn" to="/menu">Volver a la carta</Link>
     </section>
@@ -51,8 +57,10 @@ function Confirmation({ order, whatsappLink }) {
 export default function Checkout() {
   const { data: { info } } = useSite()
   const { items, subtotal, mode, clear, service, allowed } = useCart()
+  const { summary } = useClub()
   const payments = splitList(info.payments)
-  const [form, setForm] = useState({ name: '', phone: '', address: '', payment: payments[0] ?? '', notes: '' })
+  const [form, setForm] = useState({ name: summary ? `${summary.member.firstName} ${summary.member.lastName}` : '', phone: summary?.member.phone ?? '', address: '', payment: payments[0] ?? '', notes: '' })
+  const preview = summary ? previewOrderPoints(summary.member.id, subtotal) : null
   const [done, setDone] = useState(null)
   useTitle('Finalizar pedido')
 
@@ -68,9 +76,9 @@ export default function Checkout() {
     const order = createOrder({
       mode, items, subtotal, fee: totals.fee, total: totals.total, toCoordinate: totals.toCoordinate,
       customer: { name: form.name, phone: form.phone, address: mode === 'delivery' ? form.address : '' },
-      payment: form.payment, notes: form.notes,
+      payment: form.payment, notes: form.notes, memberId: summary?.member.id ?? null,
     })
-    const link = whatsappUrl(info.whatsapp, buildMessage({ code: order.code, items, subtotal, totals, form, mode }))
+    const link = whatsappUrl(info.whatsapp, buildMessage({ code: order.code, items, subtotal, totals, form, mode, memberNumber: summary?.member.number }))
     window.open(link, '_blank', 'noopener')
     setDone({ order, link })
     clear()
@@ -107,6 +115,23 @@ export default function Checkout() {
       </header>
 
       <form className="checkout__form" onSubmit={submit}>
+        {summary ? (
+          preview.total > 0 && (
+            <div className="club-banner">
+              <b>¡Este pedido te suma {preview.total.toLocaleString('es-AR')} puntos a Joakina Club!</b>
+              <small>{preview.lines.map((l) => `${l.label}: +${l.points.toLocaleString('es-AR')}`).join(' · ')}. Se acreditan cuando el pedido se entrega.</small>
+            </div>
+          )
+        ) : (
+          <div className="club-banner">
+            <b>Sumá puntos con este pedido</b>
+            <small>Iniciá sesión o registrate en Joakina Club para vincular tus compras. Si seguís como invitado, no se acreditan puntos.</small>
+            <div className="row">
+              <Link className="btn btn--gold" to="/club/registro?next=/checkout">Quiero sumarme</Link>
+              <Link className="btn btn--line" to="/club/login?next=/checkout">Ya soy socio</Link>
+            </div>
+          </div>
+        )}
         <fieldset>
           <legend><span>1</span> Tus datos</legend>
           <label>Nombre<input required autoComplete="name" value={form.name} onChange={set('name')} /></label>
