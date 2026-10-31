@@ -312,7 +312,8 @@ h2 em, h1 em { color: var(--gold); font-weight: 400; }
 .confirm__mark { display: grid; place-items: center; width: 70px; height: 70px; border: 1px solid var(--gold); border-radius: 50%; color: var(--gold); }
 
 /* Reservas */
-.booking { display: grid; grid-template-columns: 1.1fr 1fr; gap: clamp(44px, 7vw, 100px); }
+.booking { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: clamp(44px, 7vw, 100px); }
+.booking > * { min-width: 0; }
 .booking h2 { font-size: clamp(36px, 4.4vw, 54px); margin-bottom: 10px; }
 .form { display: grid; gap: 15px; margin-top: 28px; }
 .form__two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -458,3 +459,7 @@ h2 em, h1 em { color: var(--gold); font-weight: 400; }
 .mode-note { margin: -6px 0 18px; padding: 12px 14px; border: 1px solid var(--line-gold); font-size: 13.5px; color: var(--muted); }
 .mode-note a { color: var(--gold); text-decoration: underline; text-underline-offset: 3px; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+@media (min-width: 1041px) {
+  .booking__info { position: sticky; top: calc(var(--nav-h) + 24px); align-self: start; }
+}

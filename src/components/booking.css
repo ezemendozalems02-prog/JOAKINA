@@ -20,7 +20,7 @@
 .notice { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line-gold); font-size: 13.5px; color: var(--muted); }
 .notice a { color: var(--gold); text-decoration: underline; text-underline-offset: 3px; }
 
-.days { display: flex; gap: 8px; margin-inline: calc(var(--gutter) * -1); padding: 0 var(--gutter) 10px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; }
+.days { display: flex; gap: 8px; padding: 0 0 10px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; }
 .day { flex: none; display: grid; place-items: center; align-content: center; gap: 2px; width: 68px; min-height: 90px; border: 1px solid var(--line); scroll-snap-align: start; transition: all 0.25s; }
 .day:not(:disabled):hover { border-color: var(--line-gold); }
 .day small { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
@@ -88,6 +88,7 @@
 .booking__ok.is-cancelled .code { color: var(--bad); text-decoration: line-through; }
 
 @media (max-width: 760px) {
+  .days { margin-inline: calc(var(--gutter) * -1); padding-inline: var(--gutter); }
   .day small, .day em, .slot small, .legend, .plan-legend { font-size: 12px; }
   .day { width: 72px; min-height: 96px; }
   .slots { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -97,4 +98,10 @@
   .tbl { height: 64px; }
   .tbl__n { font-size: 20px; }
   .step__title small { flex-basis: 100%; margin-left: 0; text-align: left; }
+}
+
+/* Computadora: todos los días a la vista, sin deslizar de costado */
+@media (min-width: 761px) {
+  .days { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); overflow: visible; }
+  .day { width: auto; }
 }
