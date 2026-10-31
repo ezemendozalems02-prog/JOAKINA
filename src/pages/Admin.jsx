@@ -1,23 +1,27 @@
 import { useState, useCallback } from 'react'
 import { useSite } from '../context/SiteContext'
+import { splitList } from '../lib/format'
+import { deleteReservation, loadReservations, setReservationStatus, tableById, toISO } from '../lib/reservations'
 import { motion, AnimatePresence } from 'framer-motion'
+import { ArrowUpRight, Check, Eye, EyeOff, Image as ImageIcon, Images, Info, CalendarDays, LayoutDashboard, Menu as MenuIcon, RotateCcw, Save, Tag, UtensilsCrossed } from 'lucide-react'
+import { Isotype } from '../components/Logo'
 
 const PASS = 'lacan2025'
 
 // ─── Tokens ───────────────────────────────────────────────
 const C = {
-  bg:     '#111110',
-  card:   '#1a1a18',
-  input:  '#0f0f0e',
-  border: 'rgba(196,163,90,0.15)',
-  gold:   '#C4A35A',
-  cream:  '#F2EBD9',
-  muted:  '#6b7280',
-  subtle: '#9ca3af',
-  verde:  '#2D4A3E',
+  bg:     '#080808',
+  card:   '#141414',
+  input:  '#0d0d0d',
+  border: 'rgba(198,166,107,0.16)',
+  gold:   '#C6A66B',
+  cream:  '#F5F2EC',
+  muted:  '#9a968f',
+  subtle: '#b8b4ac',
+  verde:  '#202020',
   danger: '#ef4444',
 }
-const f = { serif: "'Cormorant Garamond', serif", sans: "'Inter', sans-serif" }
+const f = { serif: "'Cormorant Garamond', serif", sans: "'Manrope Variable', sans-serif" }
 
 const base = {
   width: '100%', background: C.input, border: `1px solid ${C.border}`,
@@ -62,7 +66,7 @@ function Sel({ label, value, onChange, options }) {
       <select value={value} onChange={onChange}
         onFocus={e => { setFo(true); e.target.style.borderColor = C.gold }}
         onBlur={e => { setFo(false); e.target.style.borderColor = C.border }}
-        style={{ ...base, cursor: 'pointer', appearance: 'none', background: '#0f0f0e' }}>
+        style={{ ...base, cursor: 'pointer', appearance: 'none', background: '#0d0d0d' }}>
         {options.map(o => <option key={o.value ?? o} value={o.value ?? o} style={{ background: '#111' }}>{o.label ?? o}</option>)}
       </select>
     </div>
@@ -86,11 +90,11 @@ function Btn({ children, onClick, variant = 'gold', type = 'button', full, small
     verde:   { background: C.verde,  color: C.cream, border: 'none' },
     danger:  { background: 'rgba(239,68,68,0.1)', color: C.danger, border: '1px solid rgba(239,68,68,0.2)' },
     ghost:   { background: 'transparent', color: C.muted, border: `1px solid rgba(255,255,255,0.07)` },
-    dashed:  { background: 'transparent', color: C.gold, border: `1px dashed rgba(196,163,90,0.28)` },
+    dashed:  { background: 'transparent', color: C.gold, border: `1px dashed rgba(198,166,107,0.28)` },
   }
   return (
     <button type={type} onClick={onClick} style={{ fontFamily: f.sans, fontSize: small ? 11 : 12, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', padding: small ? '7px 12px' : '10px 22px', cursor: 'pointer', transition: 'all 0.18s', whiteSpace: 'nowrap', width: full ? '100%' : 'auto', ...v[variant], ...ex }}
-      onMouseEnter={e => { if (variant === 'gold') e.currentTarget.style.background = '#d4b36a' }}
+      onMouseEnter={e => { if (variant === 'gold') e.currentTarget.style.background = '#F5F2EC' }}
       onMouseLeave={e => { e.currentTarget.style.background = v[variant].background }}>
       {children}
     </button>
@@ -99,7 +103,7 @@ function Btn({ children, onClick, variant = 'gold', type = 'button', full, small
 
 function Card({ children, accent, style: ex = {} }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${accent ? 'rgba(196,163,90,0.3)' : C.border}`, borderTop: accent ? `2px solid ${C.gold}` : undefined, padding: '26px 28px', ...ex }}>
+    <div style={{ background: C.card, border: `1px solid ${accent ? 'rgba(198,166,107,0.3)' : C.border}`, borderTop: accent ? `2px solid ${C.gold}` : undefined, padding: '26px 28px', ...ex }}>
       {children}
     </div>
   )
@@ -134,7 +138,7 @@ function Toast({ visible }) {
       {visible && (
         <motion.div initial={{ opacity: 0, y: 14, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 14 }}
           style={{ position: 'fixed', bottom: 32, right: 32, zIndex: 9999, background: C.gold, color: '#111', padding: '13px 26px', fontFamily: f.sans, fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', boxShadow: '0 16px 50px rgba(0,0,0,0.5)' }}>
-          ✓ &nbsp; Cambios guardados
+          <Check size={14} style={{ verticalAlign: -2, marginRight: 8 }} />Cambios guardados
         </motion.div>
       )}
     </AnimatePresence>
@@ -163,21 +167,21 @@ function Dashboard({ data, setSection }) {
   const visibleMenu = Object.values(data.menu).reduce((a, c) => a + c.items.filter(i => i.visible !== false).length, 0)
   const visibleGallery = data.gallery.filter(p => p.visible !== false).length
   const stats = [
-    { label: 'Platos en carta',   value: totalItems,       sub: `${visibleMenu} visibles`,               icon: '🍽️', section: 'menu' },
-    { label: 'Fotos en galería',  value: data.gallery.length, sub: `${visibleGallery} visibles`,          icon: '📸', section: 'galeria' },
-    { label: 'Promos activas',    value: data.promos.filter(p => p.visible).length, sub: 'en portada',   icon: '🏷️', section: 'promos' },
-    { label: 'Imágenes del sitio',value: Object.keys(data.images).length, sub: 'hero, about, música…',   icon: '🖼️', section: 'imagenes' },
+    { label: 'Platos en carta',   value: totalItems,       sub: `${visibleMenu} visibles`,               icon: UtensilsCrossed, section: 'menu' },
+    { label: 'Fotos en galería',  value: data.gallery.length, sub: `${visibleGallery} visibles`,          icon: Images, section: 'galeria' },
+    { label: 'Promos activas',    value: data.promos.filter(p => p.visible).length, sub: 'en portada',   icon: Tag, section: 'promos' },
+    { label: 'Imágenes del sitio',value: Object.keys(data.images).length, sub: 'portada y secciones',   icon: ImageIcon, section: 'imagenes' },
   ]
   const actions = [
-    { icon: '🍽️', label: 'Editar precios del menú',   sub: 'Actualizá precios, descripciones y badges',   section: 'menu' },
-    { icon: '🏷️', label: 'Gestionar promos',           sub: 'Editá las promos que aparecen en la home',    section: 'promos' },
-    { icon: '📸', label: 'Gestionar galería',           sub: 'Agregá, ocultá o eliminá fotos',              section: 'galeria' },
-    { icon: '🖼️', label: 'Cambiar imágenes',           sub: 'Hero, about, música, nosotros, barrio',       section: 'imagenes' },
-    { icon: 'ℹ️', label: 'Información del local',      sub: 'Teléfono, horarios, redes sociales',          section: 'info' },
+    { icon: UtensilsCrossed, label: 'Editar precios de la carta',   sub: 'Actualizá precios, descripciones y badges',   section: 'menu' },
+    { icon: Tag, label: 'Gestionar promos',           sub: 'Editá las promos que aparecen en la home',    section: 'promos' },
+    { icon: Images, label: 'Gestionar galería',           sub: 'Agregá, ocultá o eliminá fotos',              section: 'galeria' },
+    { icon: ImageIcon, label: 'Cambiar imágenes',           sub: 'Portada, experiencia, combinados, reservas',       section: 'imagenes' },
+    { icon: Info, label: 'Información del local',      sub: 'Teléfono, horarios, pagos, redes',          section: 'info' },
   ]
   return (
     <div>
-      <SectionHeader eyebrow="Panel de control" title="Bienvenido" subtitle="Editá todo el contenido del sitio en tiempo real. Los cambios se guardan en el navegador y se aplican al instante." />
+      <SectionHeader eyebrow="Panel de control" title="Bienvenido" subtitle="Editá el contenido del sitio. Los cambios se guardan en este navegador." />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14, marginBottom: 44 }}>
         {stats.map((s, i) => (
           <motion.button key={s.label} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
@@ -185,7 +189,7 @@ function Dashboard({ data, setSection }) {
             style={{ background: C.card, border: `1px solid ${C.border}`, borderTop: `2px solid ${C.gold}`, padding: '22px 18px', cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'border-color 0.2s' }}
             onMouseEnter={e => e.currentTarget.style.borderColor = C.gold}
             onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.borderTop = `2px solid ${C.gold}` }}>
-            <div style={{ fontSize: 24, marginBottom: 12 }}>{s.icon}</div>
+            <div style={{ color: C.gold, marginBottom: 12 }}><s.icon size={22} strokeWidth={1.2} /></div>
             <div style={{ fontFamily: f.serif, fontSize: 38, color: C.gold, lineHeight: 1, marginBottom: 6 }}>{s.value}</div>
             <div style={{ fontFamily: f.sans, fontSize: 12, color: C.cream, marginBottom: 2 }}>{s.label}</div>
             <div style={{ fontFamily: f.sans, fontSize: 11, color: C.muted }}>{s.sub}</div>
@@ -198,9 +202,9 @@ function Dashboard({ data, setSection }) {
           <motion.button key={a.section} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 + i * 0.06 }}
             onClick={() => setSection(a.section)}
             style={{ background: C.card, border: `1px solid ${C.border}`, padding: '18px 20px', cursor: 'pointer', textAlign: 'left', width: '100%', display: 'flex', alignItems: 'flex-start', gap: 14, transition: 'all 0.2s' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = C.gold; e.currentTarget.style.background = 'rgba(196,163,90,0.04)' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = C.gold; e.currentTarget.style.background = 'rgba(198,166,107,0.04)' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.card }}>
-            <span style={{ fontSize: 20, marginTop: 1 }}>{a.icon}</span>
+            <span style={{ color: C.gold, marginTop: 1 }}><a.icon size={20} strokeWidth={1.2} /></span>
             <div>
               <div style={{ fontFamily: f.sans, fontSize: 13, fontWeight: 600, color: C.cream, marginBottom: 3 }}>{a.label}</div>
               <div style={{ fontFamily: f.sans, fontSize: 12, color: C.muted }}>{a.sub}</div>
@@ -208,9 +212,9 @@ function Dashboard({ data, setSection }) {
           </motion.button>
         ))}
       </div>
-      <div style={{ background: 'rgba(196,163,90,0.04)', border: `1px solid rgba(196,163,90,0.18)`, borderLeft: `3px solid ${C.gold}`, padding: '16px 20px' }}>
+      <div style={{ background: 'rgba(198,166,107,0.04)', border: `1px solid rgba(198,166,107,0.18)`, borderLeft: `3px solid ${C.gold}`, padding: '16px 20px' }}>
         <p style={{ fontFamily: f.sans, fontSize: 13, color: C.subtle, lineHeight: 1.7 }}>
-          <strong style={{ color: C.gold }}>Tip:</strong> Los cambios se guardan en localStorage y se reflejan instantáneamente en el sitio. Presioná <strong style={{ color: C.cream }}>💾 Guardar</strong> en cada sección para confirmar.
+          <strong style={{ color: C.gold }}>Tip:</strong> Los cambios quedan guardados sólo en este navegador; el público no los ve hasta conectar una base de datos. Presioná <strong style={{ color: C.cream }}>Guardar</strong> en cada sección para confirmar.
         </p>
       </div>
     </div>
@@ -218,12 +222,14 @@ function Dashboard({ data, setSection }) {
 }
 
 // ── MENÚ EDITOR ───────────────────────────────────────────
+const EMPTY_ITEM = { name: '', description: '', price: '', badge: '', units: '', image: '' }
+
 function MenuEditor() {
   const { data, updateMenu } = useSite()
   const [menu, setMenu] = useState(() => JSON.parse(JSON.stringify(data.menu)))
   const [cat, setCat] = useState(Object.keys(data.menu)[0])
   const [adding, setAdding] = useState(false)
-  const [newItem, setNewItem] = useState({ name: '', description: '', price: '', badge: '' })
+  const [newItem, setNewItem] = useState(EMPTY_ITEM)
 
   const set = (c, i, field, val) => {
     const m = JSON.parse(JSON.stringify(menu))
@@ -236,14 +242,14 @@ function MenuEditor() {
     if (!newItem.name.trim()) return
     const m = JSON.parse(JSON.stringify(menu))
     m[cat].items.push({ ...newItem, id: `n_${Date.now()}`, visible: true })
-    setMenu(m); setNewItem({ name: '', description: '', price: '', badge: '' }); setAdding(false)
+    setMenu(m); setNewItem(EMPTY_ITEM); setAdding(false)
   }
 
   const items = menu[cat]?.items || []
   return (
     <div>
       <SectionHeader eyebrow="Contenido" title="Editor de Carta" subtitle="Editá precios, nombres y descripciones. Ocultá temporalmente un plato sin borrarlo."
-        action={<Btn onClick={() => updateMenu(menu)}>💾 Guardar carta</Btn>} />
+        action={<Btn onClick={() => updateMenu(menu)}><Save size={14} style={{ verticalAlign: -2, marginRight: 8 }} />Guardar carta</Btn>} />
 
       {/* Category tabs */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, marginBottom: 28, overflowX: 'auto' }}>
@@ -265,7 +271,7 @@ function MenuEditor() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 96px auto auto', gap: 10, alignItems: 'center', marginBottom: 10 }}>
               <input value={item.name} onChange={e => set(cat, idx, 'name', e.target.value)}
                 onFocus={e => e.target.style.borderColor = C.gold} onBlur={e => e.target.style.borderColor = C.border}
-                style={{ ...base, fontFamily: f.serif, fontSize: 15, fontWeight: 600, padding: '9px 12px' }} />
+                style={{ ...base, fontFamily: f.serif, fontSize: 17, fontWeight: 500, padding: '9px 12px' }} />
               <input value={item.price} onChange={e => set(cat, idx, 'price', e.target.value)}
                 onFocus={e => e.target.style.borderColor = C.gold} onBlur={e => e.target.style.borderColor = C.border}
                 placeholder="0000" style={{ ...base, fontFamily: f.serif, fontSize: 16, color: C.gold, textAlign: 'center', padding: '9px 10px' }} />
@@ -282,9 +288,18 @@ function MenuEditor() {
                 style={{ ...base, resize: 'none', fontSize: 12, color: C.muted }} />
               <select value={item.badge || ''} onChange={e => set(cat, idx, 'badge', e.target.value)}
                 onFocus={e => e.target.style.borderColor = C.gold} onBlur={e => e.target.style.borderColor = C.border}
-                style={{ ...base, fontSize: 11, padding: '8px 10px', cursor: 'pointer', background: '#0f0f0e' }}>
+                style={{ ...base, fontSize: 11, padding: '8px 10px', cursor: 'pointer', background: '#0d0d0d' }}>
                 {BADGE_OPTS.map(o => <option key={o.value} value={o.value} style={{ background: '#111' }}>{o.label}</option>)}
               </select>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginTop: 10, alignItems: 'center' }}>
+              <input value={item.units || ''} onChange={e => set(cat, idx, 'units', e.target.value)} placeholder="Unidades (ej: 6 unidades)" aria-label="Unidades" style={{ ...base, fontSize: 12 }} />
+              <input defaultValue={(item.options || []).join(', ')} onBlur={e => set(cat, idx, 'options', splitList(e.target.value))} placeholder="Opciones separadas por coma" aria-label="Opciones" style={{ ...base, fontSize: 12 }} />
+              <input value={item.image || ''} onChange={e => set(cat, idx, 'image', e.target.value)} placeholder="URL o ruta de la foto" aria-label="Foto" style={{ ...base, fontSize: 12, fontFamily: 'monospace' }} />
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontFamily: f.sans, fontSize: 12, color: C.subtle, cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!item.featured} onChange={e => set(cat, idx, 'featured', e.target.checked)} style={{ accentColor: C.gold }} />
+                Destacado en la home
+              </label>
             </div>
           </div>
         ))}
@@ -298,20 +313,22 @@ function MenuEditor() {
               style={{ background: C.card, border: `1px solid ${C.gold}`, borderTop: `2px solid ${C.gold}`, padding: '24px 20px', marginBottom: 10 }}>
               <p style={{ fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 18 }}>Nuevo plato — {menu[cat]?.label}</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <Inp label="Nombre" value={newItem.name} onChange={e => setNewItem(v => ({ ...v, name: e.target.value }))} placeholder="Ej: Provoleta a la parrilla" />
+                <Inp label="Nombre" value={newItem.name} onChange={e => setNewItem(v => ({ ...v, name: e.target.value }))} placeholder="Ej: Gyoza" />
                 <Inp label="Precio (sin $)" value={newItem.price} onChange={e => setNewItem(v => ({ ...v, price: e.target.value }))} placeholder="3500" />
               </div>
               <Txt label="Descripción" value={newItem.description} onChange={e => setNewItem(v => ({ ...v, description: e.target.value }))} rows={2} />
+              <Inp label="Unidades" value={newItem.units} onChange={e => setNewItem(v => ({ ...v, units: e.target.value }))} placeholder="Ej: 6 unidades" />
+              <Inp label="Foto (URL o ruta)" value={newItem.image} onChange={e => setNewItem(v => ({ ...v, image: e.target.value }))} placeholder="https://..." mono />
               <Sel label="Badge" value={newItem.badge} onChange={e => setNewItem(v => ({ ...v, badge: e.target.value }))} options={BADGE_OPTS} />
               <div style={{ display: 'flex', gap: 10 }}>
-                <Btn onClick={add}>✓ Agregar plato</Btn>
+                <Btn onClick={add}>Agregar plato</Btn>
                 <Btn variant="ghost" onClick={() => setAdding(false)}>Cancelar</Btn>
               </div>
             </motion.div>
           ) : (
-            <button onClick={() => setAdding(true)} style={{ width: '100%', background: 'transparent', border: `1px dashed rgba(196,163,90,0.22)`, color: C.gold, padding: '14px', fontFamily: f.sans, fontSize: 11, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer', transition: 'all 0.2s', marginTop: 4 }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(196,163,90,0.05)'; e.currentTarget.style.borderColor = C.gold }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(196,163,90,0.22)' }}>
+            <button onClick={() => setAdding(true)} style={{ width: '100%', background: 'transparent', border: `1px dashed rgba(198,166,107,0.22)`, color: C.gold, padding: '14px', fontFamily: f.sans, fontSize: 11, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer', transition: 'all 0.2s', marginTop: 4 }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(198,166,107,0.05)'; e.currentTarget.style.borderColor = C.gold }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(198,166,107,0.22)' }}>
               + Agregar plato a {menu[cat]?.label}
             </button>
           )}
@@ -333,7 +350,7 @@ function PromosEditor() {
   return (
     <div>
       <SectionHeader eyebrow="Home" title="Promos del Día" subtitle="Estas promos aparecen en la sección de la home. Podés editarlas, ocultarlas o agregar nuevas."
-        action={<Btn onClick={() => updatePromos(promos)}>💾 Guardar promos</Btn>} />
+        action={<Btn onClick={() => updatePromos(promos)}><Save size={14} style={{ verticalAlign: -2, marginRight: 8 }} />Guardar promos</Btn>} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {promos.map((p, i) => (
@@ -355,9 +372,9 @@ function PromosEditor() {
           </div>
         ))}
       </div>
-      <button onClick={add} style={{ width: '100%', background: 'transparent', border: `1px dashed rgba(196,163,90,0.22)`, color: C.gold, padding: '14px', fontFamily: f.sans, fontSize: 11, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer', marginTop: 8, transition: 'all 0.2s' }}
-        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(196,163,90,0.05)'; e.currentTarget.style.borderColor = C.gold }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(196,163,90,0.22)' }}>
+      <button onClick={add} style={{ width: '100%', background: 'transparent', border: `1px dashed rgba(198,166,107,0.22)`, color: C.gold, padding: '14px', fontFamily: f.sans, fontSize: 11, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer', marginTop: 8, transition: 'all 0.2s' }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(198,166,107,0.05)'; e.currentTarget.style.borderColor = C.gold }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(198,166,107,0.22)' }}>
         + Nueva promo
       </button>
     </div>
@@ -365,13 +382,13 @@ function PromosEditor() {
 }
 
 // ── GALERÍA EDITOR ────────────────────────────────────────
-const GALLERY_CATS = ['Ambiente', 'Café', 'Comida', 'Música', 'Barrio', 'Bar', 'Pastelería']
+const GALLERY_CATS = ['Sushi', 'Combinados', 'Cocina', 'Ambiente']
 
 function GaleriaEditor() {
   const { data, updateGallery } = useSite()
   const [gallery, setGallery] = useState(() => JSON.parse(JSON.stringify(data.gallery)))
   const [adding, setAdding] = useState(false)
-  const [newPhoto, setNewPhoto] = useState({ src: '', title: '', cat: 'Ambiente' })
+  const [newPhoto, setNewPhoto] = useState({ src: '', title: '', cat: 'Sushi' })
 
   const tog = (i) => { const g = [...gallery]; g[i] = { ...g[i], visible: !g[i].visible }; setGallery(g) }
   const del = (i) => setGallery(gallery.filter((_, j) => j !== i))
@@ -379,13 +396,13 @@ function GaleriaEditor() {
   const add = () => {
     if (!newPhoto.src.trim()) return
     setGallery([...gallery, { ...newPhoto, id: `g_${Date.now()}`, visible: true }])
-    setNewPhoto({ src: '', title: '', cat: 'Ambiente' }); setAdding(false)
+    setNewPhoto({ src: '', title: '', cat: 'Sushi' }); setAdding(false)
   }
 
   return (
     <div>
       <SectionHeader eyebrow="Galería" title="Gestión de Fotos" subtitle="Agregá, ocultá o eliminá fotos. Las fotos marcadas como visibles aparecen en la galería pública."
-        action={<Btn onClick={() => updateGallery(gallery)}>💾 Guardar galería</Btn>} />
+        action={<Btn onClick={() => updateGallery(gallery)}><Save size={14} style={{ verticalAlign: -2, marginRight: 8 }} />Guardar galería</Btn>} />
 
       <p style={{ fontFamily: f.sans, fontSize: 12, color: C.muted, marginBottom: 24 }}>
         <span style={{ color: C.cream, fontWeight: 600 }}>{gallery.length}</span> fotos totales &nbsp;·&nbsp;
@@ -410,7 +427,7 @@ function GaleriaEditor() {
                 style={{ ...base, fontSize: 12, marginBottom: 8 }} />
               <select value={photo.cat} onChange={e => upd(i, 'cat', e.target.value)}
                 onFocus={e => e.target.style.borderColor = C.gold} onBlur={e => e.target.style.borderColor = C.border}
-                style={{ ...base, fontSize: 11, padding: '7px 10px', cursor: 'pointer', background: '#0f0f0e' }}>
+                style={{ ...base, fontSize: 11, padding: '7px 10px', cursor: 'pointer', background: '#0d0d0d' }}>
                 {GALLERY_CATS.map(c => <option key={c} value={c} style={{ background: '#111' }}>{c}</option>)}
               </select>
             </div>
@@ -426,18 +443,18 @@ function GaleriaEditor() {
               <p style={{ fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 18 }}>Nueva foto</p>
               <ImgInput label="URL de la imagen" value={newPhoto.src} onChange={v => setNewPhoto(p => ({ ...p, src: v }))} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <Inp label="Título" value={newPhoto.title} onChange={e => setNewPhoto(p => ({ ...p, title: e.target.value }))} placeholder="Ej: Picada de la casa" />
+                <Inp label="Título" value={newPhoto.title} onChange={e => setNewPhoto(p => ({ ...p, title: e.target.value }))} placeholder="Ej: Niguiris" />
                 <Sel label="Categoría" value={newPhoto.cat} onChange={e => setNewPhoto(p => ({ ...p, cat: e.target.value }))} options={GALLERY_CATS.map(c => ({ value: c, label: c }))} />
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
-                <Btn onClick={add}>✓ Agregar foto</Btn>
+                <Btn onClick={add}>Agregar foto</Btn>
                 <Btn variant="ghost" onClick={() => setAdding(false)}>Cancelar</Btn>
               </div>
             </motion.div>
           ) : (
-            <button onClick={() => setAdding(true)} style={{ width: '100%', background: 'transparent', border: `1px dashed rgba(196,163,90,0.22)`, color: C.gold, padding: '14px', fontFamily: f.sans, fontSize: 11, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer', transition: 'all 0.2s' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(196,163,90,0.05)'; e.currentTarget.style.borderColor = C.gold }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(196,163,90,0.22)' }}>
+            <button onClick={() => setAdding(true)} style={{ width: '100%', background: 'transparent', border: `1px dashed rgba(198,166,107,0.22)`, color: C.gold, padding: '14px', fontFamily: f.sans, fontSize: 11, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer', transition: 'all 0.2s' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(198,166,107,0.05)'; e.currentTarget.style.borderColor = C.gold }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(198,166,107,0.22)' }}>
               + Agregar foto a la galería
             </button>
           )}
@@ -453,13 +470,13 @@ function ImagenesEditor() {
   const [imgs, setImgs] = useState({ ...data.images })
   const set = (k, v) => setImgs(i => ({ ...i, [k]: v }))
   const labels = {
-    hero: 'Hero (portada principal)', about: 'About (sección nosotros, home)',
-    music: 'Música en vivo (fondo sección)', nosotros: 'Hero página Nosotros', barrio: 'Foto barrio (página Nosotros)',
+    hero: 'Portada principal', experience1: 'Experiencia 01: Sushi Art', experience2: 'Experiencia 02: Combinados',
+    experience3: 'Experiencia 03: Cocina japonesa', combinados: 'Sección Combinados', reservas: 'Sección Reservas', nosotros: 'Página Nosotros',
   }
   return (
     <div>
       <SectionHeader eyebrow="Imágenes" title="Imágenes del Sitio" subtitle="Cambiá las imágenes principales pegando la URL. Podés usar Unsplash u otras fuentes."
-        action={<Btn onClick={() => updateImages(imgs)}>💾 Guardar imágenes</Btn>} />
+        action={<Btn onClick={() => updateImages(imgs)}><Save size={14} style={{ verticalAlign: -2, marginRight: 8 }} />Guardar imágenes</Btn>} />
       {Object.entries(labels).map(([k, l]) => (
         <ImgInput key={k} label={l} value={imgs[k] || ''} onChange={v => set(k, v)} />
       ))}
@@ -479,7 +496,7 @@ function InfoEditor() {
   return (
     <div>
       <SectionHeader eyebrow="Información" title="Datos del Local" subtitle="Esta info aparece en el footer, página de contacto y botones de WhatsApp."
-        action={<Btn onClick={() => updateInfo(info)}>💾 Guardar info</Btn>} />
+        action={<Btn onClick={() => updateInfo(info)}><Save size={14} style={{ verticalAlign: -2, marginRight: 8 }} />Guardar info</Btn>} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24 }}>
         <Card>
           <p style={{ fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 18 }}>Datos de contacto</p>
@@ -490,8 +507,13 @@ function InfoEditor() {
         </Card>
         <Card>
           <p style={{ fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 18 }}>Redes sociales</p>
-          <Inp label="Instagram (solo el usuario, sin @)" value={info.instagram} onChange={e => set('instagram', e.target.value)} placeholder="jesuislacan" />
+          <Inp label="Instagram (solo el usuario, sin @)" value={info.instagram} onChange={e => set('instagram', e.target.value)} placeholder="joakinasushi" />
           <Inp label="Facebook (URL completa)" value={info.facebook} onChange={e => set('facebook', e.target.value)} placeholder="https://facebook.com/..." />
+        </Card>
+        <Card>
+          <p style={{ fontFamily: f.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.gold, marginBottom: 18 }}>Pedidos y reservas</p>
+          <Inp label="Medios de pago (separados por coma)" value={info.payments} onChange={e => set('payments', e.target.value)} placeholder="Efectivo, Transferencia" />
+          <Txt label="Horarios de reserva (separados por coma)" value={info.reservationTimes} onChange={e => set('reservationTimes', e.target.value)} rows={3} />
         </Card>
       </div>
 
@@ -520,13 +542,62 @@ function InfoEditor() {
 // MAIN ADMIN
 // ═══════════════════════════════════════════════════════════
 
+// ── RESERVAS ──────────────────────────────────────────────
+function ReservasEditor() {
+  const [list, setList] = useState(loadReservations)
+  const [filter, setFilter] = useState('proximas')
+  const today = toISO(new Date())
+  const shown = list
+    .filter((r) => filter === 'todas' || r.date >= today)
+    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))
+  const active = shown.filter((r) => r.status === 'confirmada').length
+  const fmt = (iso) => { const t = new Date(`${iso}T12:00:00`).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' }); return t.charAt(0).toUpperCase() + t.slice(1) }
+
+  return (
+    <div>
+      <SectionHeader eyebrow="Reservas" title="Reservas de mesas"
+        subtitle="Demo: muestra las reservas hechas desde la web en este navegador. Con una base de datos real las verías todas, desde cualquier dispositivo."
+        action={<Btn variant="outline" onClick={() => setList(loadReservations())}>Actualizar</Btn>} />
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+        {[['proximas', 'Próximas'], ['todas', 'Todas']].map(([k, l]) => (
+          <button key={k} onClick={() => setFilter(k)} style={{ fontFamily: f.sans, fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '9px 16px', border: `1px solid ${filter === k ? C.gold : C.border}`, color: filter === k ? C.gold : C.muted, background: 'transparent', cursor: 'pointer' }}>{l}</button>
+        ))}
+        <span style={{ fontFamily: f.sans, fontSize: 12, color: C.muted, marginLeft: 8 }}><b style={{ color: C.cream }}>{active}</b> confirmadas · {shown.length} en la lista</span>
+      </div>
+      {shown.length === 0 && <Card><p style={{ fontFamily: f.sans, fontSize: 13, color: C.muted }}>Todavía no hay reservas. Hacé una desde la página de Reservas para verla acá.</p></Card>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {shown.map((r) => {
+          const ok = r.status === 'confirmada'
+          return (
+            <div key={r.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderLeft: `3px solid ${ok ? C.gold : 'rgba(255,255,255,0.08)'}`, padding: '16px 18px', opacity: ok ? 1 : 0.55 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'baseline' }}>
+                <div style={{ fontFamily: f.serif, fontSize: 22, color: C.cream }}>{fmt(r.date)} · {r.time} hs</div>
+                <div style={{ fontFamily: f.sans, fontSize: 11, color: C.gold, letterSpacing: '0.14em' }}>{r.code}</div>
+              </div>
+              <div style={{ fontFamily: f.sans, fontSize: 13, color: C.subtle, margin: '6px 0 12px', lineHeight: 1.6 }}>
+                <b style={{ color: C.cream, fontWeight: 600 }}>{r.name}</b> · {r.party} personas · {tableById(r.tableId)?.label ?? r.tableId} · <a href={`tel:${r.phone}`} style={{ color: C.gold }}>{r.phone}</a>
+                {r.notes && <><br />Nota: {r.notes}</>}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Btn small variant={ok ? 'danger' : 'outline'} onClick={() => setList(setReservationStatus(r.id, ok ? 'cancelada' : 'confirmada'))}>{ok ? 'Cancelar' : 'Reactivar'}</Btn>
+                <Btn small variant="ghost" onClick={() => { if (confirm('¿Eliminar esta reserva?')) setList(deleteReservation(r.id)) }}>Eliminar</Btn>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 const NAV = [
-  { id: 'dashboard', label: 'Dashboard',    icon: '⌂' },
-  { id: 'menu',      label: 'Carta',        icon: '🍽️' },
-  { id: 'promos',    label: 'Promos',       icon: '🏷️' },
-  { id: 'galeria',   label: 'Galería',      icon: '📸' },
-  { id: 'imagenes',  label: 'Imágenes',     icon: '🖼️' },
-  { id: 'info',      label: 'Información',  icon: 'ℹ️' },
+  { id: 'dashboard', label: 'Dashboard',    icon: LayoutDashboard },
+  { id: 'menu',      label: 'Carta',        icon: UtensilsCrossed },
+  { id: 'promos',    label: 'Promos',       icon: Tag },
+  { id: 'galeria',   label: 'Galería',      icon: Images },
+  { id: 'imagenes',  label: 'Imágenes',     icon: ImageIcon },
+  { id: 'reservas',  label: 'Reservas',     icon: CalendarDays },
+  { id: 'info',      label: 'Información',  icon: Info },
 ]
 
 function AdminPanel() {
@@ -540,6 +611,7 @@ function AdminPanel() {
     promos:    <PromosEditor />,
     galeria:   <GaleriaEditor />,
     imagenes:  <ImagenesEditor />,
+    reservas:  <ReservasEditor />,
     info:      <InfoEditor />,
   }
 
@@ -547,16 +619,16 @@ function AdminPanel() {
     <div style={{ width: 220, flexShrink: 0, background: C.bg, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       {/* Brand */}
       <div style={{ padding: '28px 20px 20px', borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ fontFamily: f.serif, fontSize: 16, color: C.cream, letterSpacing: '0.1em', lineHeight: 1.2 }}>JE SUIS LACAN</div>
+        <div style={{ fontFamily: f.serif, fontSize: 16, color: C.cream, letterSpacing: '0.1em', lineHeight: 1.2 }}>JOAKINA SUSHI</div>
         <div style={{ fontFamily: f.sans, fontSize: 10, color: C.gold, letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: 4 }}>Panel Admin</div>
       </div>
       {/* Nav */}
       <nav style={{ flex: 1, padding: '16px 0' }}>
         {NAV.map(n => (
-          <button key={n.id} onClick={() => { setSection(n.id); setSideOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '11px 20px', background: section === n.id ? 'rgba(196,163,90,0.08)' : 'transparent', border: 'none', borderLeft: `3px solid ${section === n.id ? C.gold : 'transparent'}`, color: section === n.id ? C.gold : C.muted, fontFamily: f.sans, fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s' }}
+          <button key={n.id} onClick={() => { setSection(n.id); setSideOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '11px 20px', background: section === n.id ? 'rgba(198,166,107,0.08)' : 'transparent', border: 'none', borderLeft: `3px solid ${section === n.id ? C.gold : 'transparent'}`, color: section === n.id ? C.gold : C.muted, fontFamily: f.sans, fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s' }}
             onMouseEnter={e => { if (section !== n.id) { e.currentTarget.style.color = C.cream; e.currentTarget.style.background = 'rgba(255,255,255,0.03)' } }}
             onMouseLeave={e => { if (section !== n.id) { e.currentTarget.style.color = C.muted; e.currentTarget.style.background = 'transparent' } }}>
-            <span style={{ fontSize: 16 }}>{n.icon}</span>
+            <n.icon size={17} strokeWidth={1.3} />
             {n.label}
           </button>
         ))}
@@ -566,10 +638,10 @@ function AdminPanel() {
         <a href="/" target="_blank" rel="noopener noreferrer" style={{ display: 'block', fontFamily: f.sans, fontSize: 11, color: C.muted, textDecoration: 'none', marginBottom: 10, transition: 'color 0.2s' }}
           onMouseEnter={e => e.currentTarget.style.color = C.cream}
           onMouseLeave={e => e.currentTarget.style.color = C.muted}>
-          ↗ Ver sitio público
+          <ArrowUpRight size={13} style={{ verticalAlign: -2, marginRight: 4 }} />Ver sitio público
         </a>
         <button onClick={() => { if (confirm('¿Restaurar todos los datos al estado original?')) resetAll() }} style={{ fontFamily: f.sans, fontSize: 11, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.05em' }}>
-          ↺ Restaurar datos
+          <RotateCcw size={12} style={{ verticalAlign: -2, marginRight: 4 }} />Restaurar datos
         </button>
       </div>
     </div>
@@ -597,7 +669,7 @@ function AdminPanel() {
         {/* Top bar */}
         <div style={{ background: C.bg, borderBottom: `1px solid ${C.border}`, padding: '0 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 56, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <button onClick={() => setSideOpen(true)} className="admin-hamburger" style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 20, padding: '4px 6px', display: 'none' }}>☰</button>
+            <button onClick={() => setSideOpen(true)} className="admin-hamburger" style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 20, padding: '4px 6px', display: 'none' }}><MenuIcon size={22} strokeWidth={1.3} /></button>
             <span style={{ fontFamily: f.sans, fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted }}>
               {NAV.find(n => n.id === section)?.label ?? 'Dashboard'}
             </span>
@@ -646,11 +718,12 @@ export default function Admin() {
   if (auth) return <AdminPanel />
 
   return (
-    <div style={{ minHeight: '100vh', background: '#111110', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} style={{ width: '100%', maxWidth: 380 }}>
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <p style={{ fontFamily: f.sans, fontSize: 10, letterSpacing: '0.4em', color: C.gold, textTransform: 'uppercase', marginBottom: 12 }}>Panel de administración</p>
-          <h1 style={{ fontFamily: f.serif, fontSize: 38, color: C.cream, fontWeight: 500, lineHeight: 1 }}>Je Suis Lacan</h1>
+          <div style={{ color: C.cream, marginBottom: 12 }}><Isotype size={56} /></div>
+          <h1 style={{ fontFamily: f.serif, fontSize: 38, color: C.cream, fontWeight: 500, lineHeight: 1 }}>Joakina Sushi</h1>
         </div>
 
         <Card accent>
@@ -662,7 +735,7 @@ export default function Admin() {
                   onFocus={e => e.target.style.borderColor = C.gold} onBlur={e => e.target.style.borderColor = err ? '#ef4444' : C.border}
                   style={{ ...base, borderColor: err ? '#ef4444' : C.border, paddingRight: 44 }} autoFocus />
                 <button type="button" onClick={() => setShow(s => !s)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 14 }}>
-                  {show ? '🙈' : '👁'}
+                  {show ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
               <AnimatePresence>
@@ -679,7 +752,7 @@ export default function Admin() {
         </Card>
 
         <p style={{ fontFamily: f.sans, fontSize: 11, color: C.muted, textAlign: 'center', marginTop: 20 }}>
-          Je Suis Lacan · San Telmo, Buenos Aires
+          Joakina Sushi · Sushi Art
         </p>
       </motion.div>
     </div>
